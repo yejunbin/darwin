@@ -1,0 +1,119 @@
+{
+  "name": "@companion-ai/darwin",
+  "version": "0.2.44",
+  "description": "Biomedical generative agent — systematic literature synthesis, clinical evidence grading, and reproducible in-silico protocols on Pi",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0 <23"
+  },
+  "bin": {
+    "darwin": "bin/darwin.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "metadata/",
+    ".darwin/agents/",
+    ".darwin/runtime-workspace.tgz",
+    ".darwin/settings.json",
+    ".darwin/SYSTEM.md",
+    ".darwin/themes/",
+    "extensions/",
+    "prompts/",
+    "logo.mjs",
+    "logo.d.mts",
+    "scripts/build-native-bundle.mjs",
+    "scripts/check-node-version.mjs",
+    "scripts/clean-publish-artifacts.mjs",
+    "scripts/extract-release-notes.mjs",
+    "scripts/install/",
+    "scripts/lib/",
+    "scripts/patch-embedded-pi.mjs",
+    "scripts/prepare-runtime-workspace.mjs",
+    "scripts/prune-runtime-deps.mjs",
+    "scripts/sync-website-installers.mjs",
+    "skills/",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "RELEASES.md",
+    "README.md",
+    ".env.example"
+  ],
+  "scripts": {
+    "preinstall": "node ./scripts/check-node-version.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "build:native-bundle": "node ./scripts/build-native-bundle.mjs",
+    "dev": "tsx src/index.ts",
+    "prepack": "node ./scripts/clean-publish-artifacts.mjs && npm run build && node ./scripts/prepare-runtime-workspace.mjs",
+    "start": "tsx src/index.ts",
+    "start:dist": "node ./bin/darwin.js",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "pi-package",
+    "biomedical-agent",
+    "systematic-review",
+    "clinical-evidence",
+    "bioinformatics",
+    "literature-synthesis"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.2.0",
+    "@companion-ai/alpha-hub": "^0.1.3",
+    "@mariozechner/pi-ai": "^0.72.1",
+    "@mariozechner/pi-coding-agent": "^0.72.1",
+    "@sinclair/typebox": "^0.34.49",
+    "dotenv": "^17.4.2"
+  },
+  "overrides": {
+    "basic-ftp": "5.3.1",
+    "@modelcontextprotocol/sdk": {
+      "@hono/node-server": "1.19.14",
+      "hono": "4.12.18"
+    },
+    "express-rate-limit": "8.5.1",
+    "ip-address": "10.2.0",
+    "express": {
+      "router": {
+        "path-to-regexp": "8.4.2"
+      }
+    },
+    "proxy-agent": {
+      "pac-proxy-agent": {
+        "get-uri": {
+          "basic-ftp": "5.3.1"
+        }
+      }
+    },
+    "protobufjs": "7.5.5",
+    "minimatch": {
+      "brace-expansion": "5.0.5"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getcompanion-ai/darwin.git"
+  },
+  "homepage": "https://github.com/getcompanion-ai/darwin#readme",
+  "bugs": {
+    "url": "https://github.com/getcompanion-ai/darwin/issues"
+  }
+}
