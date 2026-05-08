@@ -122,7 +122,7 @@ Briefly summarize: "Source is ~<chars> chars -> <N> chunks -> <N> researcher sub
 ```json
 {
   "tasks": [{
-    "agent": "researcher",
+    "agent": "bio-researcher",
     "task": "Read ONLY `outputs/.notes/<slug>-chunk-NNN.txt`. Extract: (1) key claims, (2) methodology or technical approach, (3) cited evidence. Do NOT use web_search or fetch external URLs — this is single-source summarization. If a claim appears to start or end mid-sentence at the file boundary, mark it BOUNDARY PARTIAL. Write to `outputs/.notes/<slug>-summary-chunk-NNN.md`.",
     "output": "outputs/.notes/<slug>-summary-chunk-NNN.md"
   }],
