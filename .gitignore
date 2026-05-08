@@ -35,3 +35,10 @@ coverage/
 
 # History
 history.txt
+
+# Project docs (local only)
+darwin_design.md
+RELEASES.md
+
+# Website (separate project)
+website/

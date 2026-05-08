@@ -171,18 +171,4 @@ $ darwin protocol "RNA-seq 差异表达"
 
 ---
 
-### 参与贡献
-
-详见 [CONTRIBUTING.md](CONTRIBUTING.md) 完整贡献指南。
-
-```bash
-git clone https://github.com/yejunbin/darwin.git
-cd darwin
-nvm use || nvm install
-npm install
-npm test
-npm run typecheck
-npm run build
-```
-
-[文档](https://github.com/yejunbin/darwin) - [更新日志](RELEASES.md) - [MIT 许可证](LICENSE)
+[文档](https://github.com/yejunbin/darwin) - [MIT 许可证](LICENSE)
