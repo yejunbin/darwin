@@ -4,6 +4,7 @@
   </a>
 </p>
 <p align="center">The open source AI biomedical research agent.</p>
+<p align="center"><a href="./README_zh.md">[中文]</a></p>
 
 ---
 
