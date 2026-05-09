@@ -174,7 +174,7 @@ function installNodeJsToBundle(nodePath, extractDir) {
 	const extractedBinDir = resolve(extractedRoot, "bin");
 	const npmSrc = resolve(extractedBinDir, "npm");
 	if (existsSync(npmSrc)) {
-		cpSync(npmSrc, resolve(binDir, "npm"));
+		cpSync(npmSrc, resolve(binDir, "npm"), { dereference: true });
 		console.log("[darwin-bundle] Copied npm");
 	}
 
