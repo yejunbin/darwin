@@ -156,12 +156,13 @@ function prepareWorkspace(packageSpecs) {
 		return;
 	}
 
+	const npmCmd = process.env.npm_execpath
+		? { cmd: process.execPath, args: [process.env.npm_execpath] }
+		: { cmd: process.platform === "win32" ? "npm.cmd" : "npm", args: [] };
 	const result = spawnSync(
-		process.env.npm_execpath ? process.execPath : "npm",
-		process.env.npm_execpath
-			? [process.env.npm_execpath, "install", "--prefer-online", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs]
-			: ["install", "--prefer-online", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs],
-		{ stdio: "inherit", env: childNpmInstallEnv() },
+		npmCmd.cmd,
+		[...npmCmd.args, "install", "--prefer-online", "--no-audit", "--no-fund", "--no-dry-run", "--legacy-peer-deps", "--loglevel", "error", "--prefix", workspaceDir, ...packageSpecs],
+		{ stdio: "inherit", env: childNpmInstallEnv(), shell: process.platform === "win32" },
 	);
 	if (result.status !== 0) {
 		process.exit(result.status ?? 1);

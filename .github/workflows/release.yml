@@ -20,7 +20,7 @@ jobs:
             args: '--target x86_64-apple-darwin'
             bundle-platform: 'macos-x64'
           - platform: 'ubuntu-22.04'
-            args: ''
+            args: '--bundles deb'
             bundle-platform: 'linux-x64'
           - platform: 'windows-latest'
             args: ''
