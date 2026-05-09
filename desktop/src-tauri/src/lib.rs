@@ -19,6 +19,44 @@ struct RpcEvent {
     payload: serde_json::Value,
 }
 
+fn which(cmd: &str) -> Option<std::path::PathBuf> {
+    std::env::var("PATH").ok().and_then(|paths| {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        paths.split(sep)
+            .map(|p| std::path::PathBuf::from(p).join(cmd))
+            .find(|p| p.exists())
+    })
+}
+
+fn find_darwin_binary() -> Option<std::path::PathBuf> {
+    // 1. Try `darwin` command in PATH (installed via npm or symlink)
+    if let Some(p) = which("darwin") {
+        return Some(p);
+    }
+
+    // 2. Try common local bin paths
+    if let Ok(home) = std::env::var("HOME") {
+        for dir in [".local/bin", ".cargo/bin", "bin"] {
+            let p = std::path::PathBuf::from(&home).join(dir).join("darwin");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    // 3. Try the repo development path (Linux only, for local dev)
+    let dev = std::path::PathBuf::from("/Disk1/development/darwin/bin/darwin.js");
+    if dev.exists() {
+        return Some(dev);
+    }
+
+    None
+}
+
+fn find_node() -> Option<std::path::PathBuf> {
+    which("node")
+}
+
 #[tauri::command]
 async fn spawn_darwin_rpc(
     app: AppHandle,
@@ -28,19 +66,27 @@ async fn spawn_darwin_rpc(
         .map_err(|e| format!("Cannot determine home directory: {}", e))?;
 
     let darwin_home = std::path::PathBuf::from(&home).join(".darwin");
-    let darwin_bin = std::path::PathBuf::from("/Disk1/development/darwin/bin/darwin.js");
 
-    if !darwin_bin.exists() {
-        return Err(format!("Darwin binary not found at: {:?}", darwin_bin));
-    }
+    let darwin_bin = find_darwin_binary()
+        .ok_or("Darwin CLI not found. Please install it first:\n\n  npm install -g darwin\n\nOr create a symlink:\n\n  ln -s $(pwd)/bin/darwin.js ~/.local/bin/darwin")?;
 
-    let mut child: Child = tokio::process::Command::new("node")
+    let node = find_node()
+        .ok_or("Node.js not found in PATH. Please install Node.js >= 20.")?;
+
+    // Determine working directory: if using the JS file, use its parent dir
+    let work_dir = if darwin_bin.extension().map(|e| e == "js").unwrap_or(false) {
+        darwin_bin.parent().unwrap_or(&darwin_home).to_path_buf()
+    } else {
+        darwin_home.clone()
+    };
+
+    let mut child: Child = tokio::process::Command::new(&node)
         .arg(&darwin_bin)
         .arg("--mode")
         .arg("rpc")
         .env("DARWIN_HOME", &darwin_home)
         .env("HOME", &home)
-        .current_dir("/Disk1/development/darwin")
+        .current_dir(&work_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
