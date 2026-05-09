@@ -148,6 +148,10 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    connect();
+  }, []);
+
   const handleRpcMessage = useCallback((json: Record<string, unknown>) => {
     const msgType = json.type as string | undefined;
 
