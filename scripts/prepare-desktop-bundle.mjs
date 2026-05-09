@@ -170,21 +170,23 @@ function installNodeJsToBundle(nodePath, extractDir) {
 		? resolve(extractDir, extractedEntries[0])
 		: extractDir;
 
-	// Copy npm/npx/corepack wrappers from extracted bin dir (Unix)
+	// Copy npm wrapper from extracted bin dir (Unix). Only npm is needed;
+	// corepack is a symlink that becomes broken when copied, and npx is unused.
 	const extractedBinDir = resolve(extractedRoot, "bin");
 	if (existsSync(extractedBinDir)) {
-		for (const file of readdirSync(extractedBinDir)) {
-			if (file === nodeBinaryName) continue;
+		for (const file of ["npm", "npx"]) {
 			const src = resolve(extractedBinDir, file);
-			const dest = resolve(binDir, file);
-			cpSync(src, dest);
-			console.log(`[darwin-bundle] Copied ${file}`);
+			if (existsSync(src)) {
+				const dest = resolve(binDir, file);
+				cpSync(src, dest);
+				console.log(`[darwin-bundle] Copied ${file}`);
+			}
 		}
 	}
 
-	// Windows: npm.cmd and related files are in the root dir
+	// Windows: npm.cmd is in the root dir
 	if (process.platform === "win32") {
-		for (const file of ["npm.cmd", "npx.cmd", "corepack.cmd"]) {
+		for (const file of ["npm.cmd", "npx.cmd"]) {
 			const src = resolve(extractedRoot, file);
 			if (existsSync(src)) {
 				cpSync(src, resolve(binDir, file));
