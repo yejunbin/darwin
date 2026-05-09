@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
 import "./App.css";
 import Settings from "./components/Settings";
 import OutputBrowser from "./components/OutputBrowser";
@@ -47,6 +48,22 @@ function App() {
 
   useEffect(() => {
     loadSessions();
+  }, []);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const update = await check();
+        if (update) {
+          appendSystemMessage(
+            `发现新版本 ${update.version}，点击设置中的「检查更新」下载。`
+          );
+        }
+      } catch {
+        // updater check failed silently in dev
+      }
+    };
+    checkUpdate();
   }, []);
 
   const loadSessions = async () => {

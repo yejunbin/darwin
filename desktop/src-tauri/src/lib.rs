@@ -462,6 +462,7 @@ fn run_darwin_doctor() -> Result<Vec<serde_json::Value>, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(RpcProcess::default())
         .invoke_handler(tauri::generate_handler![
             spawn_darwin_rpc,
@@ -481,6 +482,36 @@ pub fn run() {
             read_file,
             list_outputs
         ])
+        .setup(|app| {
+            let quit_i = tauri::menu::MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let show_i = tauri::menu::MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
+            let hide_i = tauri::menu::MenuItem::with_id(app, "hide", "隐藏", true, None::<&str>)?;
+            let menu = tauri::menu::Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+
+            let _tray = tauri::tray::TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "hide" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -91,7 +91,7 @@ export default function Settings({ onClose }: { onClose: () => void }) {
     setIsRunningDoctor(false);
   };
 
-  const updateProvider = (provider: string, field: keyof ProviderConfig, value: string | boolean) => {
+  const updateProvider = (provider: string, field: keyof ProviderConfig, value: string | boolean | Array<{ id: string }>) => {
     setModelsConfig((prev) => ({
       ...prev,
       [provider]: {
