@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, cpSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { resolve, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -154,7 +154,7 @@ function pruneNodeModules() {
 	execSync(`node ${resolve(root, "scripts", "prune-runtime-deps.mjs")} ${darwinBundleDir}`, { stdio: "inherit" });
 }
 
-function installNodeJsToBundle(nodePath) {
+function installNodeJsToBundle(nodePath, extractDir) {
 	const bundleNodeDir = resolve(darwinBundleDir, "node");
 	const binDir = resolve(bundleNodeDir, "bin");
 
@@ -163,6 +163,44 @@ function installNodeJsToBundle(nodePath) {
 
 	const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
 	cpSync(nodePath, resolve(binDir, nodeBinaryName));
+
+	// Determine extracted root directory (e.g. node-v20.19.0-darwin-arm64)
+	const extractedEntries = readdirSync(extractDir);
+	const extractedRoot = extractedEntries.length === 1
+		? resolve(extractDir, extractedEntries[0])
+		: extractDir;
+
+	// Copy npm/npx/corepack wrappers from extracted bin dir (Unix)
+	const extractedBinDir = resolve(extractedRoot, "bin");
+	if (existsSync(extractedBinDir)) {
+		for (const file of readdirSync(extractedBinDir)) {
+			if (file === nodeBinaryName) continue;
+			const src = resolve(extractedBinDir, file);
+			const dest = resolve(binDir, file);
+			cpSync(src, dest);
+			console.log(`[darwin-bundle] Copied ${file}`);
+		}
+	}
+
+	// Windows: npm.cmd and related files are in the root dir
+	if (process.platform === "win32") {
+		for (const file of ["npm.cmd", "npx.cmd", "corepack.cmd"]) {
+			const src = resolve(extractedRoot, file);
+			if (existsSync(src)) {
+				cpSync(src, resolve(binDir, file));
+				console.log(`[darwin-bundle] Copied ${file}`);
+			}
+		}
+	}
+
+	// Copy npm lib directory so wrapper scripts work
+	const extractedNpmLib = resolve(extractedRoot, "lib", "node_modules", "npm");
+	if (existsSync(extractedNpmLib)) {
+		const destNpmLib = resolve(bundleNodeDir, "lib", "node_modules", "npm");
+		mkdirSync(dirname(destNpmLib), { recursive: true });
+		cpSync(extractedNpmLib, destNpmLib, { recursive: true });
+		console.log("[darwin-bundle] Copied lib/node_modules/npm");
+	}
 
 	const installedPath = resolve(binDir, nodeBinaryName);
 	console.log(`[darwin-bundle] Node.js binary installed: ${installedPath}`);
@@ -190,7 +228,7 @@ async function main() {
 	buildWithNodeJs(nodePath);
 	copyDarwinSource();
 	pruneNodeModules();
-	installNodeJsToBundle(nodePath);
+	installNodeJsToBundle(nodePath, extractDir);
 
 	rmSync(extractDir, { recursive: true, force: true });
 
