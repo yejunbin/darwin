@@ -6,19 +6,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "fs:allow-home-read",
-    "fs:allow-home-write",
-    "fs:allow-read",
-    "fs:allow-write",
-    "fs:allow-app-read",
-    "fs:allow-app-write",
-    "fs:allow-app-meta",
-    "fs:allow-app-meta-recursive",
-    "fs:read-all",
-    "fs:write-all",
-    "process:allow-spawn",
-    "process:allow-execute",
-    "process:default",
-    "shell:allow-open"
+    "updater:default"
   ]
 }

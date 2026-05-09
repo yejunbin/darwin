@@ -50,9 +50,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "darwin-sidecar"
-    ],
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.13",

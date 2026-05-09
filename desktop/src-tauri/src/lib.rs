@@ -3,7 +3,7 @@ use std::process::Stdio;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout};
+use tokio::process::Child;
 use tokio::sync::mpsc;
 
 static RPC_HANDLE: OnceCell<Mutex<Option<tokio::task::JoinHandle<()>>>> = OnceCell::new();
