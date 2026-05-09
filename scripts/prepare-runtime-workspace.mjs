@@ -295,8 +295,9 @@ function archiveIsCurrent() {
 function createWorkspaceArchive() {
 	rmSync(workspaceArchivePath, { force: true });
 
-	const tarOut = process.platform === "win32" ? workspaceArchivePath.replace(/\\/g, "/") : workspaceArchivePath;
-	const tarCwd = process.platform === "win32" ? darwinDir.replace(/\\/g, "/") : darwinDir;
+	const toMsys = (p) => p.replace(/^([A-Za-z]):\\/, "/$1/").replace(/\\/g, "/");
+	const tarOut = process.platform === "win32" ? toMsys(workspaceArchivePath) : workspaceArchivePath;
+	const tarCwd = process.platform === "win32" ? toMsys(darwinDir) : darwinDir;
 	const result = spawnSync("tar", ["-czf", tarOut, "-C", tarCwd, "npm"], {
 		stdio: "inherit",
 	});
