@@ -164,6 +164,15 @@ function installNodeJsToBundle(nodePath, extractDir) {
 	const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
 	cpSync(nodePath, resolve(binDir, nodeBinaryName));
 
+	// Place a package.json in node/bin/ so Node.js treats npm as CommonJS,
+	// preventing the parent darwin/package.json (type: module) from applying.
+	writeFileSync(
+		resolve(binDir, "package.json"),
+		JSON.stringify({ type: "commonjs" }, null, 2) + "\n",
+		"utf8",
+	);
+	console.log("[darwin-bundle] Created node/bin/package.json (type: commonjs)");
+
 	// Determine extracted root directory (e.g. node-v20.19.0-darwin-arm64)
 	const extractedEntries = readdirSync(extractDir);
 	const extractedRoot = extractedEntries.length === 1
