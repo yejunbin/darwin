@@ -33,6 +33,7 @@ function App() {
   const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ name: string; path: string; modified: number; size: number }>>([]);
   const [sidebarMode, setSidebarMode] = useState<"workflows" | "sessions">("workflows");
+  const [sessionSearch, setSessionSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -59,6 +60,39 @@ function App() {
       setSessions(result);
     } catch (e) {
       console.error("Failed to load sessions:", e);
+    }
+  };
+
+  const loadSession = async (path: string) => {
+    try {
+      const content = (await invoke("read_file", { filePath: path })) as string;
+      const lines = content.trim().split("\n");
+      const loaded: Message[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line);
+          const role = entry.role as string;
+          if (role === "user" || role === "assistant" || role === "system" || role === "tool") {
+            loaded.push({
+              id: generateId(),
+              role,
+              content: entry.content || "",
+              timestamp: new Date(entry.timestamp || Date.now()),
+            });
+          }
+        } catch {
+          // skip malformed lines
+        }
+      }
+      if (loaded.length > 0) {
+        setMessages(loaded);
+        appendSystemMessage(`已加载会话: ${path.split("/").pop() || path}`);
+      } else {
+        appendSystemMessage("会话文件为空或格式不正确");
+      }
+    } catch (e) {
+      appendSystemMessage(`加载会话失败: ${String(e)}`);
     }
   };
 
@@ -324,20 +358,42 @@ function App() {
             </div>
           ) : (
             <div className="sidebar-section">
+              <div className="session-search">
+                <input
+                  type="text"
+                  placeholder="搜索会话..."
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                />
+              </div>
               <div className="session-list">
                 {sessions.length === 0 && (
                   <p className="empty-sessions">暂无历史会话</p>
                 )}
-                {sessions.map((session) => (
-                  <div key={session.name} className="session-item">
-                    <div className="session-name">{session.name.replace(".jsonl", "")}</div>
-                    <div className="session-meta">
-                      {new Date(session.modified * 1000).toLocaleDateString()}
-                      {" · "}
-                      {(session.size / 1024).toFixed(1)} KB
+                {sessions
+                  .filter((s) =>
+                    s.name.toLowerCase().includes(sessionSearch.toLowerCase())
+                  )
+                  .map((session) => (
+                    <div
+                      key={session.name}
+                      className="session-item"
+                      onClick={() => loadSession(session.path)}
+                      title="点击加载会话"
+                    >
+                      <div className="session-name">{session.name.replace(".jsonl", "")}</div>
+                      <div className="session-meta">
+                        {new Date(session.modified * 1000).toLocaleDateString()}
+                        {" · "}
+                        {(session.size / 1024).toFixed(1)} KB
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                {sessions.filter((s) =>
+                  s.name.toLowerCase().includes(sessionSearch.toLowerCase())
+                ).length === 0 && sessions.length > 0 && (
+                  <p className="empty-sessions">未找到匹配的会话</p>
+                )}
               </div>
             </div>
           )}

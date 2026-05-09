@@ -456,3 +456,27 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #4a4a7a;
 }
+
+.session-search {
+  padding: 0 0 12px;
+}
+
+.session-search input {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1a1a3e;
+  border: 1px solid #2a2a5a;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 12px;
+  outline: none;
+}
+
+.session-search input:focus {
+  border-color: #4a4a8a;
+}
+
+.session-search input::placeholder {
+  color: #666;
+}
+

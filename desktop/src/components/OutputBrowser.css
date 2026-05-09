@@ -249,3 +249,101 @@
   line-height: 1.6;
   color: #ccc;
 }
+
+.output-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.output-export-btn {
+  padding: 6px 12px;
+  background: #2a2a5e;
+  border: 1px solid #3a3a7a;
+  border-radius: 6px;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.output-export-btn:hover {
+  background: #3a3a7e;
+  color: #fff;
+}
+
+.output-search {
+  padding: 8px;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.output-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a5a;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  outline: none;
+}
+
+.output-search input:focus {
+  border-color: #4a4a8a;
+}
+
+.output-search input::placeholder {
+  color: #666;
+}
+
+.citation-badge {
+  background: #3a3a5e;
+  color: #8ABEB7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.evidence-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 2px;
+  vertical-align: middle;
+}
+
+.evidence-rct {
+  background: #1e4d2b;
+  color: #4ade80;
+}
+
+.evidence-meta {
+  background: #1e3a4d;
+  color: #60a5fa;
+}
+
+.evidence-cohort {
+  background: #4d3a1e;
+  color: #fbbf24;
+}
+
+.evidence-low {
+  background: #4a2a2a;
+  color: #f87171;
+}
+
+.evidence-preprint {
+  background: #3a2a4a;
+  color: #c084fc;
+}
+
+.evidence-preclinical {
+  background: #2a3a4a;
+  color: #9ca3af;
+}
