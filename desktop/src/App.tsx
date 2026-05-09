@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import Settings from "./components/Settings";
+import OutputBrowser from "./components/OutputBrowser";
+import WorkflowForm from "./components/WorkflowForm";
 
 interface Message {
   id: string;
@@ -27,6 +29,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("未连接");
   const [showSettings, setShowSettings] = useState(false);
+  const [showOutputBrowser, setShowOutputBrowser] = useState(false);
+  const [activeWorkflow, setActiveWorkflow] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Array<{ name: string; path: string; modified: number; size: number }>>([]);
   const [sidebarMode, setSidebarMode] = useState<"workflows" | "sessions">("workflows");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -222,9 +226,42 @@ function App() {
     "/watch",
   ];
 
-  const insertWorkflow = (cmd: string) => {
-    setInput(cmd + " ");
-    inputRef.current?.focus();
+  const openWorkflowForm = (cmd: string) => {
+    setActiveWorkflow(cmd);
+  };
+
+  const submitWorkflow = (fullCommand: string) => {
+    setActiveWorkflow(null);
+    setInput(fullCommand);
+    // Send immediately after a brief delay to allow state update
+    setTimeout(() => {
+      sendMessageDirect(fullCommand);
+    }, 0);
+  };
+
+  const sendMessageDirect = async (message: string) => {
+    if (!message.trim() || !isConnected) return;
+
+    const userMsg: Message = {
+      id: generateId(),
+      role: "user",
+      content: message.trim(),
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      const payload = JSON.stringify({
+        type: "prompt",
+        message: userMsg.content,
+      });
+      await invoke("send_rpc_message", { message: payload });
+    } catch (err) {
+      setIsLoading(false);
+      appendSystemMessage(`发送失败: ${String(err)}`);
+    }
   };
 
   return (
@@ -235,6 +272,9 @@ function App() {
           <span className="logo-text">Darwin</span>
         </div>
         <div className="header-actions">
+          <button className="btn-settings" onClick={() => setShowOutputBrowser(true)}>
+            📂 成果
+          </button>
           <button className="btn-settings" onClick={() => setShowSettings(true)}>
             ⚙️ 设置
           </button>
@@ -274,7 +314,7 @@ function App() {
                   <button
                     key={cmd}
                     className="workflow-btn"
-                    onClick={() => insertWorkflow(cmd)}
+                    onClick={() => openWorkflowForm(cmd)}
                     disabled={!isConnected}
                   >
                     {cmd}
@@ -372,6 +412,14 @@ function App() {
         </main>
       </div>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showOutputBrowser && <OutputBrowser onClose={() => setShowOutputBrowser(false)} />}
+      {activeWorkflow && (
+        <WorkflowForm
+          command={activeWorkflow}
+          onSubmit={submitWorkflow}
+          onCancel={() => setActiveWorkflow(null)}
+        />
+      )}
     </div>
   );
 }

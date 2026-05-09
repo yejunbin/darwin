@@ -281,6 +281,114 @@ fn list_sessions() -> Result<Vec<serde_json::Value>, String> {
     Ok(sessions)
 }
 
+fn darwin_home_dir() -> Result<std::path::PathBuf, String> {
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|e| format!("Cannot determine home directory: {}", e))?;
+    Ok(std::path::PathBuf::from(&home).join(".darwin"))
+}
+
+#[tauri::command]
+fn list_directory(dir_path: String) -> Result<Vec<serde_json::Value>, String> {
+    let path = std::path::PathBuf::from(&dir_path);
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    let mut entries = Vec::new();
+    for entry in std::fs::read_dir(&path).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let entry_path = entry.path();
+        let name = entry_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let is_dir = metadata.is_dir();
+        let modified = metadata.modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        entries.push(serde_json::json!({
+            "name": name,
+            "path": entry_path.to_string_lossy().to_string(),
+            "is_dir": is_dir,
+            "size": metadata.len(),
+            "modified": modified,
+        }));
+    }
+    entries.sort_by(|a, b| {
+        let a_dir = a.get("is_dir").and_then(|v| v.as_bool()).unwrap_or(false);
+        let b_dir = b.get("is_dir").and_then(|v| v.as_bool()).unwrap_or(false);
+        if a_dir != b_dir {
+            return b_dir.cmp(&a_dir);
+        }
+        let a_name = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let b_name = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        a_name.cmp(b_name)
+    });
+    Ok(entries)
+}
+
+#[tauri::command]
+fn read_file(file_path: String) -> Result<String, String> {
+    let path = std::path::PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", file_path));
+    }
+    let size = path.metadata().map_err(|e| e.to_string())?.len();
+    if size > 5 * 1024 * 1024 {
+        return Err("File too large (>5MB)".to_string());
+    }
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
+fn list_outputs() -> Result<Vec<serde_json::Value>, String> {
+    let home = darwin_home_dir()?;
+    let dirs = vec![
+        ("outputs", home.join("outputs")),
+        ("manuscripts", home.join("manuscripts")),
+        ("protocols", home.join("protocols")),
+        ("pipelines", home.join("pipelines")),
+    ];
+    let mut results = Vec::new();
+    for (category, path) in dirs {
+        if path.exists() {
+            let mut files = Vec::new();
+            for entry in std::fs::read_dir(&path).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let entry_path = entry.path();
+                let name = entry_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                let metadata = entry.metadata().map_err(|e| e.to_string())?;
+                let is_dir = metadata.is_dir();
+                let modified = metadata.modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                files.push(serde_json::json!({
+                    "name": name,
+                    "path": entry_path.to_string_lossy().to_string(),
+                    "is_dir": is_dir,
+                    "size": metadata.len(),
+                    "modified": modified,
+                }));
+            }
+            files.sort_by(|a, b| {
+                let a_mod = a.get("modified").and_then(|v| v.as_i64()).unwrap_or(0);
+                let b_mod = b.get("modified").and_then(|v| v.as_i64()).unwrap_or(0);
+                b_mod.cmp(&a_mod)
+            });
+            if !files.is_empty() {
+                results.push(serde_json::json!({
+                    "category": category,
+                    "path": path.to_string_lossy().to_string(),
+                    "files": files,
+                }));
+            }
+        }
+    }
+    Ok(results)
+}
+
 #[tauri::command]
 fn run_darwin_doctor() -> Result<Vec<serde_json::Value>, String> {
     let mut checks = Vec::new();
@@ -368,7 +476,10 @@ pub fn run() {
             read_auth_config,
             write_auth_config,
             list_sessions,
-            run_darwin_doctor
+            run_darwin_doctor,
+            list_directory,
+            read_file,
+            list_outputs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

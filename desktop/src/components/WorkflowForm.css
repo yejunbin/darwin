@@ -1,0 +1,142 @@
+.workflow-form-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.workflow-form-panel {
+  background: #1a1a3e;
+  border: 1px solid #2a2a5a;
+  border-radius: 12px;
+  width: 520px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workflow-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2a2a5a;
+  flex-shrink: 0;
+}
+
+.workflow-form-header h3 {
+  font-size: 18px;
+  color: #8ABEB7;
+  margin: 0;
+}
+
+.workflow-form-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.workflow-form-close:hover {
+  background: #2a2a5a;
+  color: #fff;
+}
+
+.workflow-form-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workflow-form-desc {
+  font-size: 13px;
+  color: #aaa;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.workflow-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-form-field label {
+  font-size: 13px;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.workflow-form-field input {
+  padding: 10px 14px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a5a;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.workflow-form-field input:focus {
+  border-color: #4a4a8a;
+}
+
+.workflow-form-field input::placeholder {
+  color: #666;
+}
+
+.workflow-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #2a2a5a;
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  padding: 8px 18px;
+  background: #8ABEB7;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #6a9e97;
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  padding: 8px 18px;
+  background: #2a2a5e;
+  color: #ccc;
+  border: 1px solid #3a3a7a;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #3a3a7e;
+  color: #fff;
+}
