@@ -107,13 +107,29 @@ async fn spawn_darwin_rpc(
         (darwin, node, work_dir)
     };
 
-    let mut child: Child = tokio::process::Command::new(&node)
-        .arg(&darwin_bin)
+    let mut cmd = tokio::process::Command::new(&node);
+    cmd.arg(&darwin_bin)
         .arg("--mode")
         .arg("rpc")
         .env("DARWIN_HOME", &darwin_home)
         .env("HOME", &home)
-        .current_dir(&work_dir)
+        .current_dir(&work_dir);
+
+    // When using bundled resources, add the bundled node/bin directory to PATH
+    // so that npm (and other bundled Node.js tools) are discoverable by Darwin
+    if get_bundled_darwin_path(&app).is_some() {
+        if let Some(node_bin_dir) = node.parent() {
+            let sep = if cfg!(windows) { ';' } else { ':' };
+            let new_path = if let Ok(existing) = std::env::var("PATH") {
+                format!("{}{}{}", node_bin_dir.display(), sep, existing)
+            } else {
+                node_bin_dir.display().to_string()
+            };
+            cmd.env("PATH", new_path);
+        }
+    }
+
+    let mut child: Child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
