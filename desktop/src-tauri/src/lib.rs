@@ -159,6 +159,197 @@ fn get_outputs_dir() -> Result<String, String> {
     Ok(outputs.to_string_lossy().to_string())
 }
 
+fn darwin_agent_dir() -> Result<std::path::PathBuf, String> {
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|e| format!("Cannot determine home directory: {}", e))?;
+    Ok(std::path::PathBuf::from(&home).join(".darwin").join("agent"))
+}
+
+#[tauri::command]
+fn read_settings() -> Result<serde_json::Value, String> {
+    let path = darwin_agent_dir()?.join("settings.json");
+    if !path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read settings.json: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse settings.json: {}", e))
+}
+
+#[tauri::command]
+fn write_settings(settings: serde_json::Value) -> Result<(), String> {
+    let path = darwin_agent_dir()?.join("settings.json");
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    std::fs::write(&path, content + "\n")
+        .map_err(|e| format!("Failed to write settings.json: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn read_models_config() -> Result<serde_json::Value, String> {
+    let path = darwin_agent_dir()?.join("models.json");
+    if !path.exists() {
+        return Ok(serde_json::json!({"providers": {}}));
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read models.json: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse models.json: {}", e))
+}
+
+#[tauri::command]
+fn write_models_config(config: serde_json::Value) -> Result<(), String> {
+    let path = darwin_agent_dir()?.join("models.json");
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize models config: {}", e))?;
+    std::fs::write(&path, content + "\n")
+        .map_err(|e| format!("Failed to write models.json: {}", e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&path).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o600);
+        let _ = std::fs::set_permissions(&path, perms);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn read_auth_config() -> Result<serde_json::Value, String> {
+    let path = darwin_agent_dir()?.join("auth.json");
+    if !path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read auth.json: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse auth.json: {}", e))
+}
+
+#[tauri::command]
+fn write_auth_config(config: serde_json::Value) -> Result<(), String> {
+    let path = darwin_agent_dir()?.join("auth.json");
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize auth config: {}", e))?;
+    std::fs::write(&path, content + "\n")
+        .map_err(|e| format!("Failed to write auth.json: {}", e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&path).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o600);
+        let _ = std::fs::set_permissions(&path, perms);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn list_sessions() -> Result<Vec<serde_json::Value>, String> {
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|e| format!("Cannot determine home directory: {}", e))?;
+    let sessions_dir = std::path::PathBuf::from(&home).join(".darwin").join("sessions");
+    if !sessions_dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut sessions = Vec::new();
+    for entry in std::fs::read_dir(&sessions_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        if name.ends_with(".jsonl") {
+            let metadata = entry.metadata().map_err(|e| e.to_string())?;
+            let modified = metadata.modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            sessions.push(serde_json::json!({
+                "name": name,
+                "path": path.to_string_lossy().to_string(),
+                "modified": modified,
+                "size": metadata.len(),
+            }));
+        }
+    }
+    sessions.sort_by(|a, b| {
+        let a_mod = a.get("modified").and_then(|v| v.as_i64()).unwrap_or(0);
+        let b_mod = b.get("modified").and_then(|v| v.as_i64()).unwrap_or(0);
+        b_mod.cmp(&a_mod)
+    });
+    Ok(sessions)
+}
+
+#[tauri::command]
+fn run_darwin_doctor() -> Result<Vec<serde_json::Value>, String> {
+    let mut checks = Vec::new();
+
+    // Check Node.js version
+    let node_version = std::process::Command::new("node")
+        .arg("--version")
+        .output();
+    match node_version {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let major = version.trim_start_matches('v').split('.').next()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            let ok = major >= 20;
+            checks.push(serde_json::json!({
+                "name": "Node.js",
+                "status": if ok { "pass" } else { "fail" },
+                "message": format!("{} (requires >= v20)", version),
+            }));
+        }
+        _ => {
+            checks.push(serde_json::json!({
+                "name": "Node.js",
+                "status": "fail",
+                "message": "Node.js not found in PATH",
+            }));
+        }
+    }
+
+    // Check Darwin home directory
+    let darwin_home = darwin_agent_dir()?.parent().unwrap().to_path_buf();
+    let ok = darwin_home.exists();
+    checks.push(serde_json::json!({
+        "name": "Darwin Home",
+        "status": if ok { "pass" } else { "fail" },
+        "message": format!("{}", darwin_home.display()),
+    }));
+
+    // Check settings.json
+    let settings_path = darwin_agent_dir()?.join("settings.json");
+    let ok = settings_path.exists();
+    checks.push(serde_json::json!({
+        "name": "Settings",
+        "status": if ok { "pass" } else { "warn" },
+        "message": if ok { "settings.json found" } else { "settings.json not found — run darwin setup first" },
+    }));
+
+    // Check models.json
+    let models_path = darwin_agent_dir()?.join("models.json");
+    let ok = models_path.exists();
+    checks.push(serde_json::json!({
+        "name": "Model Providers",
+        "status": if ok { "pass" } else { "warn" },
+        "message": if ok { "models.json found" } else { "No model providers configured — run darwin setup first" },
+    }));
+
+    // Check auth.json
+    let auth_path = darwin_agent_dir()?.join("auth.json");
+    let ok = auth_path.exists();
+    checks.push(serde_json::json!({
+        "name": "Authentication",
+        "status": if ok { "pass" } else { "warn" },
+        "message": if ok { "Auth credentials found" } else { "No auth credentials — configure a model provider" },
+    }));
+
+    Ok(checks)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -169,7 +360,15 @@ pub fn run() {
             send_rpc_message,
             stop_darwin_rpc,
             get_darwin_home,
-            get_outputs_dir
+            get_outputs_dir,
+            read_settings,
+            write_settings,
+            read_models_config,
+            write_models_config,
+            read_auth_config,
+            write_auth_config,
+            list_sessions,
+            run_darwin_doctor
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

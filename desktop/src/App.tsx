@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
+import Settings from "./components/Settings";
 
 interface Message {
   id: string;
@@ -25,6 +26,9 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("未连接");
+  const [showSettings, setShowSettings] = useState(false);
+  const [sessions, setSessions] = useState<Array<{ name: string; path: string; modified: number; size: number }>>([]);
+  const [sidebarMode, setSidebarMode] = useState<"workflows" | "sessions">("workflows");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -35,6 +39,24 @@ function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  const loadSessions = async () => {
+    try {
+      const result = (await invoke("list_sessions")) as Array<{
+        name: string;
+        path: string;
+        modified: number;
+        size: number;
+      }>;
+      setSessions(result);
+    } catch (e) {
+      console.error("Failed to load sessions:", e);
+    }
+  };
 
   useEffect(() => {
     const unlisten = listen<RpcEvent>("rpc-event", (event) => {
@@ -212,34 +234,73 @@ function App() {
           <span className="logo-icon">🧬</span>
           <span className="logo-text">Darwin</span>
         </div>
-        <div className="status-bar">
-          <span className={`status-dot ${isConnected ? "connected" : "disconnected"}`}></span>
-          <span className="status-text">{connectionStatus}</span>
-          {isConnected ? (
-            <button className="btn-disconnect" onClick={disconnect}>断开</button>
-          ) : (
-            <button className="btn-connect" onClick={connect}>连接</button>
-          )}
+        <div className="header-actions">
+          <button className="btn-settings" onClick={() => setShowSettings(true)}>
+            ⚙️ 设置
+          </button>
+          <div className="status-bar">
+            <span className={`status-dot ${isConnected ? "connected" : "disconnected"}`}></span>
+            <span className="status-text">{connectionStatus}</span>
+            {isConnected ? (
+              <button className="btn-disconnect" onClick={disconnect}>断开</button>
+            ) : (
+              <button className="btn-connect" onClick={connect}>连接</button>
+            )}
+          </div>
         </div>
       </header>
 
       <div className="app-body">
         <aside className="sidebar">
-          <div className="sidebar-section">
-            <h3>研究工作流</h3>
-            <div className="workflow-list">
-              {workflows.map((cmd) => (
-                <button
-                  key={cmd}
-                  className="workflow-btn"
-                  onClick={() => insertWorkflow(cmd)}
-                  disabled={!isConnected}
-                >
-                  {cmd}
-                </button>
-              ))}
-            </div>
+          <div className="sidebar-tabs">
+            <button
+              className={sidebarMode === "workflows" ? "active" : ""}
+              onClick={() => setSidebarMode("workflows")}
+            >
+              工作流
+            </button>
+            <button
+              className={sidebarMode === "sessions" ? "active" : ""}
+              onClick={() => setSidebarMode("sessions")}
+            >
+              会话 ({sessions.length})
+            </button>
           </div>
+
+          {sidebarMode === "workflows" ? (
+            <div className="sidebar-section">
+              <div className="workflow-list">
+                {workflows.map((cmd) => (
+                  <button
+                    key={cmd}
+                    className="workflow-btn"
+                    onClick={() => insertWorkflow(cmd)}
+                    disabled={!isConnected}
+                  >
+                    {cmd}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="sidebar-section">
+              <div className="session-list">
+                {sessions.length === 0 && (
+                  <p className="empty-sessions">暂无历史会话</p>
+                )}
+                {sessions.map((session) => (
+                  <div key={session.name} className="session-item">
+                    <div className="session-name">{session.name.replace(".jsonl", "")}</div>
+                    <div className="session-meta">
+                      {new Date(session.modified * 1000).toLocaleDateString()}
+                      {" · "}
+                      {(session.size / 1024).toFixed(1)} KB
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
 
         <main className="chat-area">
@@ -310,6 +371,7 @@ function App() {
           </div>
         </main>
       </div>
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
