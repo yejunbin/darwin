@@ -43,6 +43,7 @@
   "scripts": {
     "preinstall": "node ./scripts/check-node-version.mjs",
     "build": "tsc -p tsconfig.build.json",
+    "build:desktop-bundle": "node ./scripts/prepare-desktop-bundle.mjs",
     "build:native-bundle": "node ./scripts/build-native-bundle.mjs",
     "dev": "tsx src/index.ts",
     "prepack": "node ./scripts/clean-publish-artifacts.mjs && npm run build && node ./scripts/prepare-runtime-workspace.mjs",
@@ -115,5 +116,10 @@
   "homepage": "https://github.com/getcompanion-ai/darwin#readme",
   "bugs": {
     "url": "https://github.com/getcompanion-ai/darwin/issues"
+  },
+  "pkg": {
+    "scripts": ["bin/darwin.js", "scripts/patch-embedded-pi.mjs", "dist/index.js"],
+    "assets": ["prompts/**/*", "skills/**/*", "extensions/**/*", "metadata/**/*"],
+    "targets": ["node20-linux-x64", "node20-macos-arm64", "node20-macos-x64", "node20-win-x64"]
   }
 }

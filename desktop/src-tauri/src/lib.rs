@@ -28,6 +28,27 @@ fn which(cmd: &str) -> Option<std::path::PathBuf> {
     })
 }
 
+fn get_bundled_node_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let resource_dir = app.path().resource_dir().ok()?;
+    let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
+    let node_path = resource_dir.join("darwin").join("node").join("bin").join(node_name);
+    if node_path.exists() {
+        Some(node_path)
+    } else {
+        None
+    }
+}
+
+fn get_bundled_darwin_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let resource_dir = app.path().resource_dir().ok()?;
+    let darwin_path = resource_dir.join("darwin").join("bin").join("darwin.js");
+    if darwin_path.exists() {
+        Some(darwin_path)
+    } else {
+        None
+    }
+}
+
 fn find_darwin_binary() -> Option<std::path::PathBuf> {
     // 1. Try `darwin` command in PATH (installed via npm or symlink)
     if let Some(p) = which("darwin") {
@@ -67,17 +88,23 @@ async fn spawn_darwin_rpc(
 
     let darwin_home = std::path::PathBuf::from(&home).join(".darwin");
 
-    let darwin_bin = find_darwin_binary()
-        .ok_or("Darwin CLI not found. Please install it first:\n\n  npm install -g darwin\n\nOr create a symlink:\n\n  ln -s $(pwd)/bin/darwin.js ~/.local/bin/darwin")?;
-
-    let node = find_node()
-        .ok_or("Node.js not found in PATH. Please install Node.js >= 20.")?;
-
-    // Determine working directory: if using the JS file, use its parent dir
-    let work_dir = if darwin_bin.extension().map(|e| e == "js").unwrap_or(false) {
-        darwin_bin.parent().unwrap_or(&darwin_home).to_path_buf()
+    // Try bundled resources first (production/desktop app), fall back to PATH (development)
+    let (darwin_bin, node, work_dir) = if let (Some(darwin), Some(node_bin)) = (get_bundled_darwin_path(&app), get_bundled_node_path(&app)) {
+        let bundled_dir = app.path().resource_dir()
+            .map_err(|e| format!("Resource dir not found: {}", e))?
+            .join("darwin");
+        (darwin, node_bin, bundled_dir)
     } else {
-        darwin_home.clone()
+        let darwin = find_darwin_binary()
+            .ok_or("Darwin CLI not found. Please install it first:\n\n  npm install -g darwin\n\nOr create a symlink:\n\n  ln -s $(pwd)/bin/darwin.js ~/.local/bin/darwin")?;
+        let node = find_node()
+            .ok_or("Node.js not found in PATH. Please install Node.js >= 20.")?;
+        let work_dir = if darwin.extension().map(|e| e == "js").unwrap_or(false) {
+            darwin.parent().unwrap_or(&darwin_home).to_path_buf()
+        } else {
+            darwin_home.clone()
+        };
+        (darwin, node, work_dir)
     };
 
     let mut child: Child = tokio::process::Command::new(&node)
@@ -436,34 +463,52 @@ fn list_outputs() -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-fn run_darwin_doctor() -> Result<Vec<serde_json::Value>, String> {
+fn run_darwin_doctor(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     let mut checks = Vec::new();
 
-    // Check Node.js version
-    let node_version = std::process::Command::new("node")
-        .arg("--version")
-        .output();
-    match node_version {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let major = version.trim_start_matches('v').split('.').next()
-                .and_then(|s| s.parse::<u32>().ok())
-                .unwrap_or(0);
-            let ok = major >= 20;
-            checks.push(serde_json::json!({
+    // Check Node.js — bundled first, then PATH
+    let node_check = if let Some(node_path) = get_bundled_node_path(&app) {
+        match std::process::Command::new(&node_path).arg("--version").output() {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let major = version.trim_start_matches('v').split('.').next()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0);
+                let ok = major >= 20;
+                serde_json::json!({
+                    "name": "Node.js",
+                    "status": if ok { "pass" } else { "fail" },
+                    "message": format!("{} bundled (requires >= v20)", version),
+                })
+            }
+            _ => serde_json::json!({
                 "name": "Node.js",
-                "status": if ok { "pass" } else { "fail" },
-                "message": format!("{} (requires >= v20)", version),
-            }));
+                "status": "fail",
+                "message": "Bundled Node.js binary failed",
+            }),
         }
-        _ => {
-            checks.push(serde_json::json!({
+    } else {
+        match std::process::Command::new("node").arg("--version").output() {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let major = version.trim_start_matches('v').split('.').next()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0);
+                let ok = major >= 20;
+                serde_json::json!({
+                    "name": "Node.js",
+                    "status": if ok { "pass" } else { "fail" },
+                    "message": format!("{} from PATH (requires >= v20)", version),
+                })
+            }
+            _ => serde_json::json!({
                 "name": "Node.js",
                 "status": "fail",
                 "message": "Node.js not found in PATH",
-            }));
+            }),
         }
-    }
+    };
+    checks.push(node_check);
 
     // Check Darwin home directory
     let darwin_home = darwin_agent_dir()?.parent().unwrap().to_path_buf();

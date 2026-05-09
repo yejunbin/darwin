@@ -15,12 +15,16 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+            bundle-platform: 'macos-arm64'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
+            bundle-platform: 'macos-x64'
           - platform: 'ubuntu-22.04'
             args: ''
+            bundle-platform: 'linux-x64'
           - platform: 'windows-latest'
             args: ''
+            bundle-platform: 'win-x64'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -30,22 +34,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install Rust stable
         run: rustup update stable
 
       - name: Install Rust target (macOS x86_64 only)
-        if: matrix.args == '--target x86_64-apple-darwin'
+        if: matrix.bundle-platform == 'macos-x64'
         run: rustup target add x86_64-apple-darwin
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.bundle-platform == 'linux-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            desktop/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json', 'desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Install frontend dependencies
         run: cd desktop && npm install
+
+      - name: Prepare Darwin desktop bundle
+        shell: bash
+        run: node scripts/prepare-desktop-bundle.mjs --platform=${{ matrix.bundle-platform }}
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
