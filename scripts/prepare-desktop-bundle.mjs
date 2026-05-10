@@ -10,7 +10,7 @@ const desktopDir = resolve(root, "desktop");
 const resourcesDir = resolve(desktopDir, "src-tauri", "resources");
 const darwinBundleDir = resolve(resourcesDir, "darwin");
 
-const NODE_VERSION = "20.19.0";
+const NODE_VERSION = "22.15.1";
 
 const PLATFORM_CONFIG = {
 	"macos-arm64": {

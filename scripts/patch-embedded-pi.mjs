@@ -15,7 +15,10 @@ import { PI_SUBAGENTS_PATCH_TARGETS, patchPiSubagentsSource, stripPiSubagentBuil
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, "..");
-const darwinHome = resolve(process.env.DARWIN_HOME ?? homedir(), ".darwin");
+// DARWIN_HOME from the desktop app is already ~/.darwin; don't append another .darwin.
+const darwinHome = process.env.DARWIN_HOME?.endsWith(".darwin")
+	? process.env.DARWIN_HOME
+	: resolve(process.env.DARWIN_HOME ?? homedir(), ".darwin");
 const darwinNpmPrefix = resolve(darwinHome, "npm-global");
 process.env.DARWIN_NPM_PREFIX = darwinNpmPrefix;
 process.env.NPM_CONFIG_PREFIX = darwinNpmPrefix;
@@ -131,7 +134,9 @@ function arraysMatch(left, right) {
 
 function supportsNativePackageSources(version = process.versions.node) {
 	const [major = "0"] = version.replace(/^v/, "").split(".");
-	return (Number.parseInt(major, 10) || 0) <= 24;
+	const majorNum = Number.parseInt(major, 10) || 0;
+	// node:sqlite (used by @samfp/pi-memory) requires Node.js >= 22
+	return majorNum >= 22 && majorNum <= 24;
 }
 
 function createInstallCommand(packageManager, packageSpecs) {
@@ -966,4 +971,36 @@ if (existsSync(piMemoryPath)) {
 		source = source.replace(execOriginal, execReplacement);
 	}
 	writeFileSync(piMemoryPath, source, "utf8");
+}
+
+// Patch Pi main.js: in RPC mode, don't exit on extension loading diagnostics or missing models.
+// The desktop host handles these gracefully via the UI.
+const piMainPath = piPackageRoot ? resolve(piPackageRoot, "dist", "main.js") : null;
+if (piMainPath && existsSync(piMainPath)) {
+	let source = readFileSync(piMainPath, "utf8");
+	const diagnosticsExitOriginal = `reportDiagnostics(runtime.diagnostics);
+    if (runtime.diagnostics.some((diagnostic) => diagnostic.type === "error")) {
+        process.exit(1);
+    }`;
+	const diagnosticsExitReplacement = `reportDiagnostics(runtime.diagnostics);
+    if (runtime.diagnostics.some((diagnostic) => diagnostic.type === "error")) {
+        if (appMode !== "rpc") {
+            process.exit(1);
+        }
+    }`;
+	if (source.includes(diagnosticsExitOriginal)) {
+		source = source.replace(diagnosticsExitOriginal, diagnosticsExitReplacement);
+	}
+	const noModelExitOriginal = `if (appMode !== "interactive" && !session.model) {
+        console.error(chalk.red(formatNoModelsAvailableMessage()));
+        process.exit(1);
+    }`;
+	const noModelExitReplacement = `if (appMode !== "interactive" && appMode !== "rpc" && !session.model) {
+        console.error(chalk.red(formatNoModelsAvailableMessage()));
+        process.exit(1);
+    }`;
+	if (source.includes(noModelExitOriginal)) {
+		source = source.replace(noModelExitOriginal, noModelExitReplacement);
+	}
+	writeFileSync(piMainPath, source, "utf8");
 }

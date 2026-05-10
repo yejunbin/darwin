@@ -515,11 +515,11 @@ fn run_darwin_doctor(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
                 let major = version.trim_start_matches('v').split('.').next()
                     .and_then(|s| s.parse::<u32>().ok())
                     .unwrap_or(0);
-                let ok = major >= 20;
+                let ok = major >= 22;
                 serde_json::json!({
                     "name": "Node.js",
                     "status": if ok { "pass" } else { "fail" },
-                    "message": format!("{} bundled (requires >= v20)", version),
+                    "message": format!("{} bundled (requires >= v22)", version),
                 })
             }
             _ => serde_json::json!({
