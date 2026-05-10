@@ -58,7 +58,7 @@ function App() {
     ]);
   }, []);
 
-  const startLoadingTimeout = useCallback(() => {
+  const resetLoadingTimeout = useCallback(() => {
     clearLoadingTimeout();
     loadingTimeoutRef.current = setTimeout(() => {
       setIsLoading(false);
@@ -153,9 +153,13 @@ function App() {
         } catch {
           appendSystemMessage(line);
         }
+        // Reset timeout on any stdout activity to avoid firing during long operations
+        if (isLoading) resetLoadingTimeout();
       } else if (event_type === "stderr") {
         const line = typeof payload === "string" ? payload : JSON.stringify(payload);
         appendSystemMessage(`[stderr] ${line}`);
+        // Reset timeout on stderr activity too (e.g., npm install progress)
+        if (isLoading) resetLoadingTimeout();
       }
     });
 
@@ -180,62 +184,155 @@ function App() {
     connect();
   }, []);
 
-  const handleRpcMessage = useCallback((json: Record<string, unknown>) => {
-    const msgType = json.type as string | undefined;
+  const handleRpcMessage = useCallback(
+    (json: Record<string, unknown>) => {
+      const msgType = json.type as string | undefined;
 
-    if (msgType === "message_start" || msgType === "message_update") {
-      const content = (json.content as string) || "";
-      const role = (json.role as string) || "assistant";
-
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.role === role && !last.content.endsWith("\n\n")) {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...last,
-            content: last.content + content,
-          };
-          return updated;
+      // Pi emits content as a string or as an array of content parts.
+      const extractContentText = (content: unknown): string => {
+        if (typeof content === "string") return content;
+        if (Array.isArray(content)) {
+          return content
+            .map((part: unknown) => {
+              if (typeof part === "string") return part;
+              if (part && typeof part === "object") {
+                const p = part as Record<string, unknown>;
+                if (p.type === "text" && typeof p.text === "string") return p.text;
+                if (p.type === "thinking" && typeof p.thinking === "string")
+                  return `💭 ${p.thinking}`;
+              }
+              return "";
+            })
+            .filter(Boolean)
+            .join("\n");
         }
-        return [
-          ...prev,
-          {
-            id: generateId(),
-            role: role as "user" | "assistant" | "system" | "tool",
-            content,
-            timestamp: new Date(),
-          },
-        ];
-      });
-    } else if (msgType === "message_end") {
-      setIsLoading(false);
-      clearLoadingTimeout();
-    } else if (msgType === "response") {
-      const success = json.success as boolean;
-      const cmd = json.command as string;
-      const error = json.error as string | undefined;
-      if (!success) {
+        return "";
+      };
+
+      if (msgType === "turn_start") {
+        setIsLoading(true);
+        resetLoadingTimeout();
+        return;
+      }
+
+      if (msgType === "turn_end") {
+        const msg = json.message as Record<string, unknown> | undefined;
+        const role = (msg?.role as string) || "assistant";
+        const content = extractContentText(msg?.content);
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === role) {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...last,
+              content: content || last.content,
+            };
+            return updated;
+          }
+          return [
+            ...prev,
+            {
+              id: generateId(),
+              role: role as "user" | "assistant" | "system" | "tool",
+              content,
+              timestamp: new Date(),
+            },
+          ];
+        });
         setIsLoading(false);
         clearLoadingTimeout();
-        appendSystemMessage(`❌ 请求失败 (${cmd}): ${error || "未知错误"}`);
+        return;
       }
-    } else if (msgType === "tool_execution_start") {
-      const toolName = (json.tool as string) || "unknown";
-      appendSystemMessage(`🔧 正在执行工具: ${toolName}`);
-    } else if (msgType === "agent_start") {
-      const agentName = (json.agent as string) || "unknown";
-      appendSystemMessage(`🤖 代理启动: ${agentName}`);
-    } else if (msgType === "agent_end") {
-      const agentName = (json.agent as string) || "unknown";
-      appendSystemMessage(`✅ 代理完成: ${agentName}`);
-    } else if (msgType === "extension_ui_request") {
-      const method = json.method as string;
-      appendSystemMessage(`📢 UI 请求: ${method}`);
-    } else {
+
+      if (msgType === "message_start" || msgType === "message_update") {
+        const msg = json.message as Record<string, unknown> | undefined;
+        const content = extractContentText(msg?.content);
+        const role = (msg?.role as string) || "assistant";
+
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === role && msgType === "message_update") {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              ...last,
+              content: last.content + content,
+            };
+            return updated;
+          }
+          if (msgType === "message_start") {
+            return [
+              ...prev,
+              {
+                id: generateId(),
+                role: role as "user" | "assistant" | "system" | "tool",
+                content,
+                timestamp: new Date(),
+              },
+            ];
+          }
+          return prev;
+        });
+        return;
+      }
+
+      if (msgType === "message_end") {
+        setIsLoading(false);
+        clearLoadingTimeout();
+        return;
+      }
+
+      if (msgType === "response") {
+        const success = json.success as boolean;
+        const cmd = json.command as string;
+        const error = json.error as string | undefined;
+        if (!success) {
+          setIsLoading(false);
+          clearLoadingTimeout();
+          appendSystemMessage(`❌ 请求失败 (${cmd}): ${error || "未知错误"}`);
+        }
+        return;
+      }
+
+      if (msgType === "tool_execution_start") {
+        const toolName = (json.tool as string) || "unknown";
+        appendSystemMessage(`🔧 正在执行工具: ${toolName}`);
+        return;
+      }
+
+      if (msgType === "agent_start") {
+        const agentName = (json.agent as string) || "Darwin";
+        appendSystemMessage(`🤖 代理启动: ${agentName}`);
+        return;
+      }
+
+      if (msgType === "agent_end") {
+        const agentName = (json.agent as string) || "Darwin";
+        appendSystemMessage(`✅ 代理完成: ${agentName}`);
+        return;
+      }
+
+      if (msgType === "extension_ui_request") {
+        const method = json.method as string;
+        appendSystemMessage(`📢 UI 请求: ${method}`);
+        return;
+      }
+
+      // Silently ignore other known Pi event types
+      if (
+        msgType === "thinking" ||
+        msgType === "thinking_start" ||
+        msgType === "thinking_end" ||
+        msgType === "toolcall_start" ||
+        msgType === "toolcall_end"
+      ) {
+        return;
+      }
+
       const raw = JSON.stringify(json, null, 2);
       appendSystemMessage(raw);
-    }
-  }, [appendSystemMessage, clearLoadingTimeout]);
+    },
+    [appendSystemMessage, clearLoadingTimeout, resetLoadingTimeout]
+  );
 
   const connect = async () => {
     try {
@@ -274,7 +371,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
-    startLoadingTimeout();
+    resetLoadingTimeout();
 
     try {
       const payload = JSON.stringify({
@@ -339,7 +436,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
-    startLoadingTimeout();
+    resetLoadingTimeout();
 
     try {
       const payload = JSON.stringify({
