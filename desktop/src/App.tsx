@@ -38,6 +38,7 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jsonBufferRef = useRef<string>("");
 
   const clearLoadingTimeout = useCallback(() => {
     if (loadingTimeoutRef.current) {
@@ -165,12 +166,51 @@ function App() {
 
       if (event_type === "stdout") {
         const line = typeof payload === "string" ? payload : JSON.stringify(payload);
-        try {
-          const json = JSON.parse(line);
-          handleRpcMessage(json);
-        } catch {
-          appendSystemMessage(line);
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          // Empty line: try to flush the buffer
+          if (jsonBufferRef.current) {
+            try {
+              const json = JSON.parse(jsonBufferRef.current);
+              handleRpcMessage(json);
+            } catch {
+              // Buffered content is not valid JSON — silently drop it
+              console.warn("[darwin stdout] buffered non-JSON:", jsonBufferRef.current);
+            }
+            jsonBufferRef.current = "";
+          }
+          return;
         }
+
+        // Try parsing this line on its own first
+        try {
+          const json = JSON.parse(trimmed);
+          handleRpcMessage(json);
+          return;
+        } catch {
+          // Not a complete JSON object on its own
+        }
+
+        // Try concatenating with any buffered partial JSON
+        const combined = jsonBufferRef.current ? jsonBufferRef.current + trimmed : trimmed;
+        try {
+          const json = JSON.parse(combined);
+          handleRpcMessage(json);
+          jsonBufferRef.current = "";
+          return;
+        } catch {
+          // Still incomplete or invalid
+        }
+
+        // If it looks like the start of JSON, or we're already buffering, keep buffering
+        if (trimmed.startsWith("{") || trimmed.startsWith("[") || jsonBufferRef.current) {
+          jsonBufferRef.current = combined;
+        } else {
+          // Plain non-JSON stdout — silently drop it (same as CLI interactive mode)
+          console.warn("[darwin stdout] non-JSON:", line);
+        }
+
         // Reset timeout on any stdout activity to avoid firing during long operations
         if (isLoading) resetLoadingTimeout();
       } else if (event_type === "stderr") {
@@ -208,6 +248,7 @@ function App() {
       const msgType = json.type as string | undefined;
 
       // Pi emits content as a string or as an array of content parts.
+      // Match CLI interactive mode: only show text content, never thinking.
       const extractContentText = (content: unknown): string => {
         if (typeof content === "string") return content;
         if (Array.isArray(content)) {
@@ -217,8 +258,7 @@ function App() {
               if (part && typeof part === "object") {
                 const p = part as Record<string, unknown>;
                 if (p.type === "text" && typeof p.text === "string") return p.text;
-                if (p.type === "thinking" && typeof p.thinking === "string")
-                  return `💭 ${p.thinking}`;
+                // thinking blocks are intentionally dropped — same as CLI interactive mode
               }
               return "";
             })
@@ -238,26 +278,28 @@ function App() {
         const msg = json.message as Record<string, unknown> | undefined;
         const role = (msg?.role as string) || "assistant";
         const content = extractContentText(msg?.content);
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === role) {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...last,
-              content: content || last.content,
-            };
-            return updated;
-          }
-          return [
-            ...prev,
-            {
-              id: generateId(),
-              role: role as "user" | "assistant" | "system" | "tool",
-              content,
-              timestamp: new Date(),
-            },
-          ];
-        });
+        if (content) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === role) {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...last,
+                content,
+              };
+              return updated;
+            }
+            return [
+              ...prev,
+              {
+                id: generateId(),
+                role: role as "user" | "assistant" | "system" | "tool",
+                content,
+                timestamp: new Date(),
+              },
+            ];
+          });
+        }
         setIsLoading(false);
         clearLoadingTimeout();
         return;
@@ -267,6 +309,10 @@ function App() {
         const msg = json.message as Record<string, unknown> | undefined;
         const content = extractContentText(msg?.content);
         const role = (msg?.role as string) || "assistant";
+
+        // Ignore user-role message_start to avoid duplicating the user's own message
+        // (the user message is already added by sendMessage/sendMessageDirect)
+        if (role === "user") return;
 
         setMessages((prev) => {
           const last = prev[prev.length - 1];
