@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, cpSync, rmSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, rmSync, writeFileSync, readdirSync, chmodSync } from "node:fs";
 import { resolve, dirname, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
@@ -202,7 +202,8 @@ function installNodeJsToBundle(nodePath, extractDir) {
 require("../lib/node_modules/npm/bin/npm-cli.js")(process)
 `;
 		writeFileSync(resolve(binDir, "npm"), npmWrapper, "utf8");
-		console.log("[darwin-bundle] Created bin/npm wrapper");
+		chmodSync(resolve(binDir, "npm"), 0o755);
+		console.log("[darwin-bundle] Created bin/npm wrapper (+x)");
 	}
 
 	const installedPath = resolve(binDir, nodeBinaryName);
