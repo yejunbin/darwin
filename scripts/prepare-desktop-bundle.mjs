@@ -179,30 +179,30 @@ function installNodeJsToBundle(nodePath, extractDir) {
 		? resolve(extractDir, extractedEntries[0])
 		: extractDir;
 
-	// Copy npm wrapper from extracted bin dir (Unix). Only npm is needed.
-	const extractedBinDir = resolve(extractedRoot, "bin");
-	const npmSrc = resolve(extractedBinDir, "npm");
-	if (existsSync(npmSrc)) {
-		cpSync(npmSrc, resolve(binDir, "npm"), { dereference: true });
-		console.log("[darwin-bundle] Copied npm");
-	}
-
-	// Windows: npm.cmd is in the root dir
-	if (process.platform === "win32") {
-		const npmCmdSrc = resolve(extractedRoot, "npm.cmd");
-		if (existsSync(npmCmdSrc)) {
-			cpSync(npmCmdSrc, resolve(binDir, "npm.cmd"));
-			console.log("[darwin-bundle] Copied npm.cmd");
-		}
-	}
-
-	// Copy npm lib directory so wrapper scripts work
+	// Copy npm lib directory first so the wrapper can resolve it
 	const extractedNpmLib = resolve(extractedRoot, "lib", "node_modules", "npm");
 	if (existsSync(extractedNpmLib)) {
 		const destNpmLib = resolve(bundleNodeDir, "lib", "node_modules", "npm");
 		mkdirSync(dirname(destNpmLib), { recursive: true });
 		cpSync(extractedNpmLib, destNpmLib, { recursive: true });
 		console.log("[darwin-bundle] Copied lib/node_modules/npm");
+	}
+
+	if (process.platform === "win32") {
+		// Windows: npm.cmd is in the root dir
+		const npmCmdSrc = resolve(extractedRoot, "npm.cmd");
+		if (existsSync(npmCmdSrc)) {
+			cpSync(npmCmdSrc, resolve(binDir, "npm.cmd"));
+			console.log("[darwin-bundle] Copied npm.cmd");
+		}
+	} else {
+		// Unix: create a wrapper script that loads npm-cli.js from the correct
+		// relative path. Dereferencing symlinks breaks internal require() paths.
+		const npmWrapper = `#!/usr/bin/env node
+require("../lib/node_modules/npm/bin/npm-cli.js")(process)
+`;
+		writeFileSync(resolve(binDir, "npm"), npmWrapper, "utf8");
+		console.log("[darwin-bundle] Created bin/npm wrapper");
 	}
 
 	const installedPath = resolve(binDir, nodeBinaryName);
