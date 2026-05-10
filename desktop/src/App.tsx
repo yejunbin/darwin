@@ -46,6 +46,18 @@ function App() {
     }
   }, []);
 
+  const appendSystemMessage = useCallback((content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: generateId(),
+        role: "system",
+        content,
+        timestamp: new Date(),
+      },
+    ]);
+  }, []);
+
   const startLoadingTimeout = useCallback(() => {
     clearLoadingTimeout();
     loadingTimeoutRef.current = setTimeout(() => {
@@ -223,19 +235,7 @@ function App() {
       const raw = JSON.stringify(json, null, 2);
       appendSystemMessage(raw);
     }
-  }, []);
-
-  const appendSystemMessage = useCallback((content: string) => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: generateId(),
-        role: "system",
-        content,
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+  }, [appendSystemMessage, clearLoadingTimeout]);
 
   const connect = async () => {
     try {
