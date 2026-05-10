@@ -117,15 +117,36 @@ function App() {
         if (!line.trim()) continue;
         try {
           const entry = JSON.parse(line);
-          const role = entry.role as string;
-          if (role === "user" || role === "assistant" || role === "system" || role === "tool") {
-            loaded.push({
-              id: generateId(),
-              role,
-              content: entry.content || "",
-              timestamp: new Date(entry.timestamp || Date.now()),
-            });
+          // Pi session format: messages are wrapped in { type: "message", message: { role, content } }
+          if (entry.type !== "message") continue;
+          const msg = entry.message as Record<string, unknown> | undefined;
+          const role = msg?.role as string;
+          if (role !== "user" && role !== "assistant" && role !== "system" && role !== "tool") continue;
+
+          let text = "";
+          const rawContent = msg?.content;
+          if (typeof rawContent === "string") {
+            text = rawContent;
+          } else if (Array.isArray(rawContent)) {
+            text = rawContent
+              .map((part: unknown) => {
+                if (typeof part === "string") return part;
+                if (part && typeof part === "object") {
+                  const p = part as Record<string, unknown>;
+                  if (p.type === "text" && typeof p.text === "string") return p.text;
+                }
+                return "";
+              })
+              .filter(Boolean)
+              .join("\n");
           }
+
+          loaded.push({
+            id: generateId(),
+            role,
+            content: text,
+            timestamp: new Date(entry.timestamp || Date.now()),
+          });
         } catch {
           // skip malformed lines
         }
