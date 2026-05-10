@@ -35,7 +35,9 @@ export type PiWebAccessStatus = {
 };
 
 export function getPiWebSearchConfigPath(home?: string): string {
-	const darwinHome = home ? resolve(home, ".darwin") : getDarwinHome();
+	const darwinHome = home
+		? home.endsWith(".darwin") ? home : resolve(home, ".darwin")
+		: getDarwinHome();
 	return resolve(darwinHome, "web-search.json");
 }
 

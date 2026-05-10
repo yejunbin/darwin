@@ -3,7 +3,9 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 export function getDarwinHome(): string {
-	return resolve(process.env.DARWIN_HOME ?? homedir(), ".darwin");
+	const env = process.env.DARWIN_HOME;
+	if (env?.endsWith(".darwin")) return env;
+	return resolve(env ?? homedir(), ".darwin");
 }
 
 export function getDarwinAgentDir(home = getDarwinHome()): string {
