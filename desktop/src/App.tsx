@@ -92,7 +92,7 @@ function App() {
       }
     };
     checkUpdate();
-  }, []);
+  }, [appendSystemMessage]);
 
   const loadSessions = async () => {
     try {
@@ -132,9 +132,6 @@ function App() {
       }
       if (loaded.length > 0) {
         setMessages(loaded);
-        appendSystemMessage(`已加载会话: ${path.split("/").pop() || path}`);
-      } else {
-        appendSystemMessage("会话文件为空或格式不正确");
       }
     } catch (e) {
       appendSystemMessage(`加载会话失败: ${String(e)}`);
@@ -157,7 +154,8 @@ function App() {
         if (isLoading) resetLoadingTimeout();
       } else if (event_type === "stderr") {
         const line = typeof payload === "string" ? payload : JSON.stringify(payload);
-        appendSystemMessage(`[stderr] ${line}`);
+        // Log stderr to console instead of chat to keep UI clean like CLI mode
+        console.warn("[darwin stderr]", line);
         // Reset timeout on stderr activity too (e.g., npm install progress)
         if (isLoading) resetLoadingTimeout();
       }
@@ -293,32 +291,12 @@ function App() {
         return;
       }
 
-      if (msgType === "tool_execution_start") {
-        const toolName = (json.tool as string) || "unknown";
-        appendSystemMessage(`🔧 正在执行工具: ${toolName}`);
-        return;
-      }
-
-      if (msgType === "agent_start") {
-        const agentName = (json.agent as string) || "Darwin";
-        appendSystemMessage(`🤖 代理启动: ${agentName}`);
-        return;
-      }
-
-      if (msgType === "agent_end") {
-        const agentName = (json.agent as string) || "Darwin";
-        appendSystemMessage(`✅ 代理完成: ${agentName}`);
-        return;
-      }
-
-      if (msgType === "extension_ui_request") {
-        const method = json.method as string;
-        appendSystemMessage(`📢 UI 请求: ${method}`);
-        return;
-      }
-
-      // Silently ignore other known Pi event types
+      // Silently ignore internal Pi events to keep chat clean (like CLI interactive mode)
       if (
+        msgType === "tool_execution_start" ||
+        msgType === "agent_start" ||
+        msgType === "agent_end" ||
+        msgType === "extension_ui_request" ||
         msgType === "thinking" ||
         msgType === "thinking_start" ||
         msgType === "thinking_end" ||
@@ -328,8 +306,7 @@ function App() {
         return;
       }
 
-      const raw = JSON.stringify(json, null, 2);
-      appendSystemMessage(raw);
+      // Silently drop unknown events instead of flooding chat with raw JSON
     },
     [appendSystemMessage, clearLoadingTimeout, resetLoadingTimeout]
   );
@@ -337,10 +314,9 @@ function App() {
   const connect = async () => {
     try {
       setConnectionStatus("正在连接...");
-      const result = await invoke<string>("spawn_darwin_rpc");
+      await invoke<string>("spawn_darwin_rpc");
       setIsConnected(true);
       setConnectionStatus("已连接");
-      appendSystemMessage(result);
     } catch (err) {
       setConnectionStatus("连接失败");
       appendSystemMessage(`连接失败: ${String(err)}`);
