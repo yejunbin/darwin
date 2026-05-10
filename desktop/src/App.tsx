@@ -318,10 +318,16 @@ function App() {
           const last = prev[prev.length - 1];
           if (last && last.role === role && msgType === "message_update") {
             const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...last,
-              content: last.content + content,
-            };
+            if (content.startsWith(last.content)) {
+              // Pi sent the full accumulated text — replace instead of appending
+              updated[updated.length - 1] = { ...last, content };
+            } else {
+              // Truly incremental chunk — append
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + content,
+              };
+            }
             return updated;
           }
           if (msgType === "message_start") {
