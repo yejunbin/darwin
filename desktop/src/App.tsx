@@ -37,6 +37,22 @@ function App() {
   const [sessionSearch, setSessionSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearLoadingTimeout = useCallback(() => {
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startLoadingTimeout = useCallback(() => {
+    clearLoadingTimeout();
+    loadingTimeoutRef.current = setTimeout(() => {
+      setIsLoading(false);
+      appendSystemMessage("⏱️ 请求超时：Darwin 未能在 60 秒内响应。请检查模型配置和网络连接。");
+    }, 60000);
+  }, [clearLoadingTimeout, appendSystemMessage]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -181,6 +197,16 @@ function App() {
       });
     } else if (msgType === "message_end") {
       setIsLoading(false);
+      clearLoadingTimeout();
+    } else if (msgType === "response") {
+      const success = json.success as boolean;
+      const cmd = json.command as string;
+      const error = json.error as string | undefined;
+      if (!success) {
+        setIsLoading(false);
+        clearLoadingTimeout();
+        appendSystemMessage(`❌ 请求失败 (${cmd}): ${error || "未知错误"}`);
+      }
     } else if (msgType === "tool_execution_start") {
       const toolName = (json.tool as string) || "unknown";
       appendSystemMessage(`🔧 正在执行工具: ${toolName}`);
@@ -190,6 +216,9 @@ function App() {
     } else if (msgType === "agent_end") {
       const agentName = (json.agent as string) || "unknown";
       appendSystemMessage(`✅ 代理完成: ${agentName}`);
+    } else if (msgType === "extension_ui_request") {
+      const method = json.method as string;
+      appendSystemMessage(`📢 UI 请求: ${method}`);
     } else {
       const raw = JSON.stringify(json, null, 2);
       appendSystemMessage(raw);
@@ -226,6 +255,8 @@ function App() {
       await invoke("stop_darwin_rpc");
       setIsConnected(false);
       setConnectionStatus("已断开");
+      clearLoadingTimeout();
+      setIsLoading(false);
     } catch (err) {
       appendSystemMessage(`断开失败: ${String(err)}`);
     }
@@ -243,6 +274,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
+    startLoadingTimeout();
 
     try {
       const payload = JSON.stringify({
@@ -252,6 +284,7 @@ function App() {
       await invoke("send_rpc_message", { message: payload });
     } catch (err) {
       setIsLoading(false);
+      clearLoadingTimeout();
       appendSystemMessage(`发送失败: ${String(err)}`);
     }
   };
@@ -306,6 +339,7 @@ function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
+    startLoadingTimeout();
 
     try {
       const payload = JSON.stringify({
@@ -315,6 +349,7 @@ function App() {
       await invoke("send_rpc_message", { message: payload });
     } catch (err) {
       setIsLoading(false);
+      clearLoadingTimeout();
       appendSystemMessage(`发送失败: ${String(err)}`);
     }
   };

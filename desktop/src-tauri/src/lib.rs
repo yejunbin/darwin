@@ -8,6 +8,26 @@ use tokio::sync::mpsc;
 
 static RPC_HANDLE: OnceCell<Mutex<Option<tokio::task::JoinHandle<()>>>> = OnceCell::new();
 
+fn log_to_file(label: &str, content: &str) {
+    let log_path = std::path::PathBuf::from(
+        std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| "/tmp".to_string())
+    ).join(".darwin").join("desktop-rpc.log");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    let millis = now.subsec_millis();
+    let line = format!("[{}.{}] [{}] {}\n", secs, millis, label, content);
+    let _ = std::fs::create_dir_all(log_path.parent().unwrap_or(std::path::Path::new("/tmp")));
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, line.as_bytes()));
+}
+
 #[derive(Default)]
 pub struct RpcProcess {
     stdin_sender: Mutex<Option<mpsc::UnboundedSender<String>>>,
@@ -175,12 +195,14 @@ async fn spawn_darwin_rpc(
                 if line.trim().is_empty() {
                     continue;
                 }
+                log_to_file("STDOUT", &line);
                 let event = RpcEvent {
                     event_type: "stdout".to_string(),
                     payload: serde_json::Value::String(line.clone()),
                 };
                 let _ = app_stdout.emit("rpc-event", event);
             }
+            log_to_file("STDOUT", "=== stdout stream ended ===");
         });
 
         let app_stderr = app.clone();
@@ -188,12 +210,14 @@ async fn spawn_darwin_rpc(
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
+                log_to_file("STDERR", &line);
                 let event = RpcEvent {
                     event_type: "stderr".to_string(),
                     payload: serde_json::Value::String(line.clone()),
                 };
                 let _ = app_stderr.emit("rpc-event", event);
             }
+            log_to_file("STDERR", "=== stderr stream ended ===");
         });
 
         tokio::select! {
@@ -213,6 +237,7 @@ async fn spawn_darwin_rpc(
 
 #[tauri::command]
 fn send_rpc_message(state: State<'_, RpcProcess>, message: String) -> Result<(), String> {
+    log_to_file("SEND", &message);
     let sender = state.stdin_sender.lock().map_err(|e| e.to_string())?;
     if let Some(tx) = sender.as_ref() {
         tx.send(message).map_err(|e| format!("Send error: {}", e))?;
