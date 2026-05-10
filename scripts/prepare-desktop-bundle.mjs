@@ -199,7 +199,7 @@ function installNodeJsToBundle(nodePath, extractDir) {
 		// Unix: create a wrapper script that loads npm-cli.js from the correct
 		// relative path. Dereferencing symlinks breaks internal require() paths.
 		const npmWrapper = `#!/usr/bin/env node
-require("../lib/node_modules/npm/bin/npm-cli.js")(process)
+require("../lib/node_modules/npm/bin/npm-cli.js")
 `;
 		writeFileSync(resolve(binDir, "npm"), npmWrapper, "utf8");
 		chmodSync(resolve(binDir, "npm"), 0o755);
